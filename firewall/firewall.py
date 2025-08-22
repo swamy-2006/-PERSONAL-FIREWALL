@@ -112,15 +112,19 @@ def _apply_macos_rules(block_rules):
 
 
 def _apply_windows_rules(block_rules):
-    """Windows implementation using netsh."""
+    """Windows implementation using netsh with a consistent rule name."""
     subprocess.run(["netsh", "advfirewall", "firewall", "delete", "rule", "name=\"Python Firewall Block\""],
                    capture_output=True)
     for i, rule in enumerate(block_rules):
-        rule_name = f"Python Firewall Block {i}"
-        command = ["netsh", "advfirewall", "firewall", "add", "rule", "name=", rule_name, "dir=in", "action=block"]
+        rule_name = "Python Firewall Block"
+        description = rule.get("comment", "Blocked by Python Firewall")
+        command = ["netsh", "advfirewall", "firewall", "add", "rule", "name=", rule_name, "description=", description,
+                   "dir=in", "action=block"]
         if 'src_ip' in rule:
             command.extend(["remoteip=", rule['src_ip']])
-        subprocess.run(command, check=True)
+        if 'dst_port' in rule and 'protocol' in rule:
+            command.extend(["protocol=", rule['protocol'].lower(), "localport=", str(rule['dst_port'])])
+        subprocess.run(command, check=True, capture_output=True)
 
 
 def start_firewall_monitoring(rules):
