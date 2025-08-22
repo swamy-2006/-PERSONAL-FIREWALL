@@ -1,0 +1,25 @@
+{
+  "rules": [
+    {
+      "comment": "Block web traffic from host 4",
+      "host": 4,
+      "protocol": "TCP",
+      "port": 80,
+      "action": "block"
+    },
+    {
+      "comment": "Block all traffic from host 19",
+      "host": 19,
+      "protocol": "ANY",
+      "port": "ANY",
+      "action": "block"
+    },
+    {
+      "comment": "Allow DNS traffic from host 10",
+      "host": 10,
+      "protocol": "UDP",
+      "port": 53,
+      "action": "allow"
+    }
+  ]
+}
