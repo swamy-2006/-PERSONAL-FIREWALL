@@ -1,76 +1,62 @@
 {
   "rules": [
-
-
     {
-      "action": "block",
-      "src_ip": "192.168.1.150",
-      "comment": "Block ALL traffic coming FROM a specific device on your network."
+      "action": "allow",
+      "protocol": "TCP",
+      "dst_port": 22,
+      "comment": "Allow SSH access (important for remote management)"
     },
     {
-      "action": "block",
-      "dst_ip": "157.240.22.35",
-      "comment": "Block ALL traffic going TO a specific external IP (e.g., a known malicious server)."
+      "action": "allow",
+      "protocol": "TCP",
+      "dst_port": 443,
+      "comment": "Allow HTTPS websites (secure browsing)"
     },
-
-
+    {
+      "action": "allow",
+      "protocol": "TCP",
+      "dst_port": 80,
+      "comment": "Allow HTTP websites (regular browsing)"
+    },
+    {
+      "action": "allow",
+      "protocol": "UDP",
+      "dst_port": 53,
+      "comment": "Allow DNS lookups (essential for internet)"
+    },
     {
       "action": "block",
       "protocol": "ICMP",
-      "comment": "Block ALL ICMP traffic (disables ping for all devices)."
+      "comment": "Block ping requests (stealth mode)"
     },
-
-
+    {
+      "action": "block",
+      "src_ip": "192.168.1.666",
+      "comment": "Block suspicious IP address"
+    },
     {
       "action": "block",
       "protocol": "TCP",
       "dst_port": 23,
-      "comment": "Block any outgoing connection to Port 23 (insecure Telnet)."
+      "comment": "Block insecure Telnet protocol"
     },
     {
       "action": "block",
       "protocol": "TCP",
       "dst_port": 21,
-      "comment": "Block any outgoing connection to Port 21 (insecure FTP)."
+      "comment": "Block insecure FTP protocol"
     },
     {
-      "action": "block",
+      "action": "log",
       "protocol": "TCP",
-      "dst_port": 8080,
-      "comment": "Block traffic going to a specific web server port (e.g., a proxy)."
-    },
-
-
-    {
-      "action": "block",
-      "src_ip": "192.168.1.101",
-      "protocol": "TCP",
-      "dst_port": 443,
-      "comment": "Block a specific device (192.168.1.101) from accessing secure websites (HTTPS on port 443)."
+      "dst_port": 3389,
+      "comment": "Log Windows Remote Desktop attempts"
     },
     {
-      "action": "block",
-      "src_ip": "192.168.1.102",
+      "action": "allow",
       "protocol": "UDP",
-      "comment": "Block ALL UDP traffic from a specific device (often used for gaming or streaming)."
-    },
-
-     {
-      "action": "log",
-      "protocol": "TCP",
-      "dst_port": 22,
-      "comment": "Log any attempt to connect from your network to an external SSH server (Port 22)."
-    },
-    {
-      "action": "log",
-      "protocol": "UDP",
-      "dst_port": 53,
-      "comment": "Log all DNS requests (Port 53). Useful for seeing which websites are being looked up."
-    },
-    {
-      "action": "log",
-      "src_ip": "192.168.1.200",
-      "comment": "Log ALL activity from a specific device for monitoring purposes without blocking it."
+      "dst_port": 123,
+      "comment": "Allow NTP time synchronization"
     }
   ]
 }
