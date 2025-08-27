@@ -1,0 +1,15 @@
+{
+  "rules": [
+    {
+      "action": "block",
+      "protocol": "TCP",
+      "dst_port": 80,
+      "comment": "Block all HTTP websites"
+    },
+    {
+      "action": "block",
+      "domain": "<any domain>",
+      "comment": "Block Facebook completely"
+    }
+  ]
+}
