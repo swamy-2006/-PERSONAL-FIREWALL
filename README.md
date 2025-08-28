@@ -25,3 +25,6 @@ sudo apt install iptables
 # Optional: Install additional tools
 pip3 install psutil  # For system info
 ```
+
+
+*Here Two types of firewall are demonstrated*
