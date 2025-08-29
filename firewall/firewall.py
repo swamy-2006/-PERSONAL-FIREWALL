@@ -34,7 +34,7 @@ def load_rules(rules_file='r1.json'):
         with open(rules_file, 'r') as f:
             return json.load(f)['rules']
     except Exception as e:
-        messagebox.showerror("Error", f"Could not load rules.json: {e}")
+        messagebox.showerror("Error", f"Could not load {rules_file}: {e}")
         return []
 
 
@@ -49,8 +49,9 @@ def apply_system_rules(rules):
             _apply_macos_rules(rules)
         elif system == "Windows":
             _apply_windows_rules(rules)
+        else:
+            messagebox.showwarning("Warning", f"Unsupported OS: {system}. Rules cannot be applied at the system level.")
     except subprocess.CalledProcessError as e:
-        # Provide more detailed error information for debugging
         error_output = e.stderr.decode() if e.stderr else "No error output."
         messagebox.showerror("Error", f"Failed to apply system rules: {e}\nDetails: {error_output}")
     except Exception as e:
@@ -62,7 +63,6 @@ def clear_system_rules():
     system = platform.system()
     try:
         if system == "Linux":
-            # Flush all chains and reset to default policy
             subprocess.run(["sudo", "iptables", "-F"], check=True)
             subprocess.run(["sudo", "iptables", "-P", "INPUT", "ACCEPT"], check=True)
             subprocess.run(["sudo", "iptables", "-P", "FORWARD", "ACCEPT"], check=True)
@@ -71,54 +71,44 @@ def clear_system_rules():
             subprocess.run(["sudo", "pfctl", "-f", "/etc/pf.conf"], check=True)
             subprocess.run(["sudo", "pfctl", "-d"], check=True)
         elif system == "Windows":
-            # Delete all rules in the "Python Firewall" group
             try:
                 subprocess.run(
                     'netsh advfirewall firewall delete rule group="Python Firewall"',
-                    shell=True, capture_output=True, text=True, timeout=30
+                    shell=True, check=False, capture_output=True, text=True, timeout=30
                 )
             except subprocess.TimeoutExpired:
-                print("Warning: Clear rules command timed out")
+                logging.warning("Clear rules command timed out.")
             except Exception as e:
-                print(f"Warning: Could not clear existing rules: {e}")
+                logging.warning(f"Could not clear existing rules: {e}")
     except subprocess.CalledProcessError as e:
         messagebox.showerror("Error", f"Failed to clear system rules: {e}")
+    except Exception as e:
+        messagebox.showerror("Error", f"Unexpected error while clearing rules: {e}")
 
 
 def _apply_linux_rules(rules):
     """Linux implementation using iptables with proper ALLOW/BLOCK logic."""
-    # Clear existing rules first
     subprocess.run(["sudo", "iptables", "-F"], check=True)
-
-    # Set default policy to DROP (block everything by default)
     subprocess.run(["sudo", "iptables", "-P", "INPUT", "DROP"], check=True)
     subprocess.run(["sudo", "iptables", "-P", "FORWARD", "DROP"], check=True)
-
-    # Allow loopback traffic (essential for system)
     subprocess.run(["sudo", "iptables", "-A", "INPUT", "-i", "lo", "-j", "ACCEPT"], check=True)
     subprocess.run(["sudo", "iptables", "-A", "OUTPUT", "-o", "lo", "-j", "ACCEPT"], check=True)
-
-    # Allow established connections (important!)
     subprocess.run(["sudo", "iptables", "-A", "INPUT", "-m", "state", "--state", "ESTABLISHED,RELATED", "-j", "ACCEPT"],
                    check=True)
 
-    # Apply custom rules
     for rule in rules:
-        action = "ACCEPT" if rule['action'] == 'allow' else "DROP"
+        action = "ACCEPT" if rule.get('action') == 'allow' else "DROP"
+        command = ["sudo", "iptables", "-A", "INPUT"]
 
         if 'src_ip' in rule:
-            command = ["sudo", "iptables", "-A", "INPUT", "-s", rule['src_ip'], "-j", action]
-            subprocess.run(command, check=True)
-
+            command.extend(["-s", rule['src_ip']])
         if 'dst_port' in rule and 'protocol' in rule:
-            proto = rule['protocol'].lower()
-            port = str(rule['dst_port'])
-            command = ["sudo", "iptables", "-A", "INPUT", "-p", proto, "--dport", port, "-j", action]
-            subprocess.run(command, check=True)
-
+            command.extend(["-p", rule['protocol'].lower(), "--dport", str(rule['dst_port'])])
         if 'protocol' in rule and rule['protocol'].upper() == 'ICMP':
-            command = ["sudo", "iptables", "-A", "INPUT", "-p", "icmp", "-j", action]
-            subprocess.run(command, check=True)
+            command.extend(["-p", "icmp"])
+        
+        command.extend(["-j", action])
+        subprocess.run(command, check=True)
 
 
 def _apply_macos_rules(rules):
@@ -130,24 +120,26 @@ def _apply_macos_rules(rules):
         ""
     ]
 
-    # Add custom rules
     for rule in rules:
-        action = "pass" if rule['action'] == 'allow' else "block"
+        action = "pass" if rule.get('action') == 'allow' else "block"
+        rule_string = f"{action} in"
 
         if 'src_ip' in rule:
-            pf_rules.append(f"{action} in from {rule['src_ip']} to any")
+            rule_string += f" from {rule['src_ip']}"
+        else:
+            rule_string += " from any"
 
         if 'dst_port' in rule and 'protocol' in rule:
-            proto = rule['protocol'].lower()
-            port = rule['dst_port']
-            pf_rules.append(f"{action} in proto {proto} from any to any port {port}")
+            rule_string += f" proto {rule['protocol'].lower()} to any port {rule['dst_port']}"
+        elif 'protocol' in rule and rule['protocol'].upper() == 'ICMP':
+            rule_string += " proto icmp to any"
+        else:
+            rule_string += " to any"
 
-        if 'protocol' in rule and rule['protocol'].upper() == 'ICMP':
-            pf_rules.append(f"{action} in proto icmp from any to any")
+        pf_rules.append(rule_string)
 
-    # Default allow established connections
     pf_rules.append("pass out keep state")
-    pf_rules.append("pass in proto tcp from any to any port 22")  # Keep SSH open
+    pf_rules.append("pass in proto tcp from any to any port 22")
 
     with open('/tmp/pf_firewall_rules.conf', 'w') as f:
         f.write('\n'.join(pf_rules))
@@ -157,38 +149,29 @@ def _apply_macos_rules(rules):
 
 def _apply_windows_rules(rules):
     """Windows implementation with proper ALLOW/BLOCK rules."""
-    # Clear all rules belonging to our group first to prevent conflicts
     try:
         subprocess.run(
             'netsh advfirewall firewall delete rule group="Python Firewall"',
-            shell=True, capture_output=True, text=True, timeout=30
+            shell=True, check=False, capture_output=True, text=True, timeout=30
         )
-    except subprocess.TimeoutExpired:
-        print("Warning: Delete rules command timed out")
     except Exception as e:
-        print(f"Warning: Could not delete existing rules: {e}")
+        logging.warning(f"Could not clear existing rules: {e}")
 
-    # Set default firewall behavior
     try:
         subprocess.run(
             "netsh advfirewall set allprofiles firewallpolicy blockinbound,allowoutbound",
             shell=True, check=True, timeout=30
         )
-    except subprocess.TimeoutExpired:
-        messagebox.showerror("Error", "Setting firewall policy timed out")
-        return
     except subprocess.CalledProcessError as e:
         messagebox.showerror("Error", f"Failed to set firewall policy: {e}")
         return
 
-    # Apply individual rules
     for i, rule in enumerate(rules):
         try:
             comment = rule.get("comment", f"Python Firewall Rule {i + 1}")
             rule_name = f"Python Firewall Rule {i + 1}"
-            action_cmd = "allow" if rule['action'] == 'allow' else "block"
+            action_cmd = "allow" if rule.get('action') == 'allow' else "block"
 
-            # Build base command
             command_parts = [
                 "netsh", "advfirewall", "firewall", "add", "rule",
                 f'name="{rule_name}"',
@@ -198,7 +181,6 @@ def _apply_windows_rules(rules):
                 f"action={action_cmd}"
             ]
 
-            # Add protocol
             if 'protocol' in rule:
                 protocol = rule['protocol'].upper()
                 if protocol == 'ICMP':
@@ -206,18 +188,15 @@ def _apply_windows_rules(rules):
                 else:
                     command_parts.append(f"protocol={protocol.lower()}")
 
-            # Add source IP
             if 'src_ip' in rule:
                 command_parts.append(f"remoteip={rule['src_ip']}")
 
-            # Add destination port
             if 'dst_port' in rule:
                 command_parts.append(f"localport={rule['dst_port']}")
 
-            # Join command parts and execute
             command = " ".join(command_parts)
             
-            result = subprocess.run(
+            subprocess.run(
                 command, 
                 shell=True, 
                 capture_output=True, 
@@ -226,19 +205,12 @@ def _apply_windows_rules(rules):
                 check=True
             )
             
-            print(f"Successfully applied rule {i+1}: {rule_name}")
-            
         except subprocess.TimeoutExpired:
-            print(f"Warning: Rule {i+1} command timed out")
-            continue
+            logging.warning(f"Rule {i+1} command timed out.")
         except subprocess.CalledProcessError as e:
-            print(f"Failed to apply rule {i+1}: {e}")
-            if e.stderr:
-                print(f"Error details: {e.stderr}")
-            continue
+            logging.error(f"Failed to apply rule {i+1}: {e.stderr}")
         except Exception as e:
-            print(f"Unexpected error with rule {i+1}: {e}")
-            continue
+            logging.error(f"Unexpected error with rule {i+1}: {e}")
 
 
 # --- PACKET INSPECTION ENGINE ---
@@ -264,21 +236,19 @@ class PacketInspector:
         elif packet.haslayer(scapy.ICMP):
             proto = 'ICMP'
 
-        # Check against rules
         for rule in self.rules:
             if self._match_rule(rule, src_ip, dst_ip, proto, dport):
-                action = rule['action'].upper()
+                action = rule.get('action', 'log').upper()
                 reason = rule.get('comment', 'No comment')
 
+                status = "📋 LOGGED"
                 if action == 'BLOCK':
                     self.blocked_count += 1
                     status = "🚫 BLOCKED"
                 elif action == 'ALLOW':
                     self.allowed_count += 1
                     status = "✅ ALLOWED"
-                else:
-                    status = "📋 LOGGED"
-
+                
                 log_message = (f"{status} | {proto or 'IP'} | {src_ip}→{dst_ip}"
                                f"{f':{dport}' if dport else ''} | {reason}")
 
@@ -322,7 +292,6 @@ class FirewallGUI:
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Control Frame
         control_frame = ttk.Frame(main_frame)
         control_frame.pack(fill=tk.X, pady=5)
 
@@ -330,13 +299,12 @@ class FirewallGUI:
         self.start_button.pack(side=tk.LEFT, padx=5)
 
         self.stop_button = ttk.Button(control_frame, text="⏹ STOP FIREWALL", command=self.stop_firewall,
-                                      state=tk.DISABLED)
+                                     state=tk.DISABLED)
         self.stop_button.pack(side=tk.LEFT, padx=5)
 
         self.reload_button = ttk.Button(control_frame, text="🔄 RELOAD RULES", command=self.reload_rules)
         self.reload_button.pack(side=tk.LEFT, padx=5)
 
-        # Status Frame
         status_frame = ttk.LabelFrame(main_frame, text="Firewall Status", padding="10")
         status_frame.pack(fill=tk.X, pady=5)
 
@@ -346,14 +314,12 @@ class FirewallGUI:
         self.stats_label = ttk.Label(status_frame, text="Blocked: 0 | Allowed: 0")
         self.stats_label.pack(side=tk.RIGHT)
 
-        # Rules Frame
         rules_frame = ttk.LabelFrame(main_frame, text="Active Firewall Rules", padding="10")
         rules_frame.pack(fill=tk.BOTH, expand=False, pady=10)
 
         self.rules_text = scrolledtext.ScrolledText(rules_frame, wrap=tk.WORD, height=10, state=tk.DISABLED)
         self.rules_text.pack(fill=tk.BOTH, expand=True)
 
-        # Log Frame
         log_frame = ttk.LabelFrame(main_frame, text="Live Network Traffic Monitor", padding="10")
         log_frame.pack(fill=tk.BOTH, expand=True, pady=5)
 
@@ -370,18 +336,19 @@ class FirewallGUI:
         if not self.rules:
             self.rules_text.insert(tk.END, "⚠️ No rules found in rules.json\n")
         else:
-            allow_count = sum(1 for r in self.rules if r['action'] == 'allow')
-            block_count = sum(1 for r in self.rules if r['action'] == 'block')
-            log_count = sum(1 for r in self.rules if r['action'] == 'log')
+            allow_count = sum(1 for r in self.rules if r.get('action') == 'allow')
+            block_count = sum(1 for r in self.rules if r.get('action') == 'block')
+            log_count = sum(1 for r in self.rules if r.get('action') == 'log')
 
             self.rules_text.insert(tk.END, f"📊 RULE SUMMARY: {len(self.rules)} total rules | ")
             self.rules_text.insert(tk.END, f"✅ {allow_count} ALLOW | 🚫 {block_count} BLOCK | 📋 {log_count} LOG\n\n")
 
             for i, rule in enumerate(self.rules, 1):
-                action_emoji = {"allow": "✅", "block": "🚫", "log": "📋"}.get(rule['action'], "❓")
+                action = rule.get('action', 'log')
+                action_emoji = {"allow": "✅", "block": "🚫", "log": "📋"}.get(action, "❓")
                 comment = rule.get('comment', 'No comment')
 
-                rule_details = f"{i:2d}. {action_emoji} {rule['action'].upper()}: {comment}"
+                rule_details = f"{i:2d}. {action_emoji} {action.upper()}: {comment}"
 
                 if 'protocol' in rule:
                     rule_details += f" | Protocol: {rule['protocol']}"
@@ -397,7 +364,6 @@ class FirewallGUI:
         self.rules_text.config(state=tk.DISABLED)
 
     def reload_rules(self):
-        """Reload rules from file and update display."""
         self.rules = load_rules()
         self.packet_inspector = PacketInspector(self.rules, self.log_queue)
         self.display_rules()
@@ -413,21 +379,16 @@ class FirewallGUI:
         self.log_queue.put("🔥 === FIREWALL STARTING ===")
         self.log_queue.put("📋 Applying system-level firewall rules...")
 
-        # Run rule application in a separate thread to prevent GUI freezing
         def apply_rules_thread():
             try:
                 apply_system_rules(self.rules)
                 self.log_queue.put("✅ System firewall rules applied successfully!")
                 self.log_queue.put("👀 Starting packet monitoring...")
-                
-                # Start packet sniffer
                 self.sniffer_thread = threading.Thread(target=self.packet_sniffer_worker, daemon=True)
                 self.sniffer_thread.start()
-                
             except Exception as e:
                 self.log_queue.put(f"❌ Error applying rules: {e}")
                 self.is_running = False
-                # Reset buttons on main thread
                 self.root.after(0, self.reset_buttons_after_error)
                 return
 
@@ -449,7 +410,6 @@ class FirewallGUI:
             return
 
         self.is_running = False
-
         self.log_queue.put("🛑 === FIREWALL STOPPING ===")
         self.log_queue.put("🧹 Clearing system firewall rules...")
 
@@ -480,7 +440,6 @@ class FirewallGUI:
             blocked = self.packet_inspector.blocked_count
             allowed = self.packet_inspector.allowed_count
             self.stats_label.config(text=f"🚫 Blocked: {blocked} | ✅ Allowed: {allowed}")
-
         self.root.after(1000, self.update_stats)
 
     def process_log_queue(self):
@@ -502,7 +461,7 @@ class FirewallGUI:
     def on_closing(self):
         if self.is_running:
             self.stop_firewall()
-            time.sleep(1)  # Give time for cleanup
+            time.sleep(1)
         self.root.destroy()
 
 
