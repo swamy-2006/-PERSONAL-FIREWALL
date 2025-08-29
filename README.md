@@ -345,3 +345,82 @@ The project's evolution was defined by two major enhancements that transformed i
 
 The final product is a complete and functional firewall. It is a powerful **educational tool** that demonstrates key concepts in cybersecurity, including network packet inspection, system-level rule enforcement, and safe, concurrent programming practices. This project serves as a strong foundation for future development, such as adding a GUI for real-time rule creation or advanced traffic analytics.
 
+
+------------------------
+
+
+
+
+
+# CLI VERSION
+
+[firewall_cli.py](https://github.com/swamy-2006/-PERSONAL-FIREWALL/blob/8e2dc8fad421b761bf611a38acbee1e84ae17608/firewall_cli.py)
+
+This CLI version will maintain the core functionality while providing a terminal-based interface.I've created a comprehensive CLI version of your firewall application. Here are the key features and improvements:
+
+##  **CLI Firewall Features**
+
+### **Command Line Arguments**
+- `--start` / `-s`: Start firewall immediately
+- `--stop`: Stop firewall and clear rules
+- `--status`: Show current status
+- `--rules`: Display loaded rules
+- `--interactive` / `-i`: Run in interactive mode
+- `--monitor` / `-m`: Enable packet monitoring
+- `--no-monitor`: Disable packet monitoring
+- `--rules-file` / `-f`: Specify custom rules file
+- `--verbose` / `-v`: Enable debug logging
+
+### **Interactive Commands**
+When running in interactive mode, you can use:
+- `start` - Start firewall
+- `stop` - Stop firewall  
+- `status` - Show status and stats
+- `rules` - Display current rules
+- `reload` - Reload rules from file
+- `monitor` - Start packet monitoring
+- `stopmon` - Stop monitoring
+- `help` - Show available commands
+- `exit/quit` - Exit application
+
+### **Usage Examples**
+
+```bash
+# Basic usage - start interactive mode
+python firewall_cli.py
+
+# Start firewall immediately with monitoring
+python firewall_cli.py --start --monitor
+
+# Start firewall without monitoring
+python firewall_cli.py --start --no-monitor
+
+# Quick status check
+python firewall_cli.py --status
+
+# Display rules and exit
+python firewall_cli.py --rules
+
+# Use custom rules file
+python firewall_cli.py -f custom_rules.json --start
+
+# Stop any running firewall
+python firewall_cli.py --stop
+```
+
+### **Key Improvements Over GUI Version**
+
+1. **Better Signal Handling**: Graceful shutdown with Ctrl+C
+2. **Flexible Operation Modes**: Interactive, single-command, or daemon-like
+3. **Enhanced Logging**: Both file and console output
+4. **Command Line Arguments**: Full control without interaction
+5. **Statistics Tracking**: Real-time packet counters
+6. **Error Handling**: Robust error reporting and recovery
+
+### **Prerequisites**
+- Administrator/root privileges (required for system firewall modification)
+- Python 3.6+
+- scapy library: `pip install scapy`
+- existing `rules.json` rules file(rules1.json/rules2.json)
+
+The CLI version maintains all the core functionality of your GUI version while providing a more scriptable and automation-friendly interface. It's perfect for server environments, automation scripts, or users who prefer command-line tools.
