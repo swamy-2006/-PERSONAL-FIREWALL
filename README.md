@@ -354,7 +354,7 @@ The final product is a complete and functional firewall. It is a powerful **educ
 
 # CLI VERSION
 
-[firewall_cli.py](https://github.com/swamy-2006/-PERSONAL-FIREWALL/blob/8e2dc8fad421b761bf611a38acbee1e84ae17608/firewall_cli.py)
+[firewall_cli.py](https://github.com/swamy-2006/-PERSONAL-FIREWALL/blob/8e2dc8fad421b761bf611a38acbee1e84ae17608/firewall_cli.py](https://github.com/swamy-2006/-PERSONAL-FIREWALL/blob/1e802c489a969de0bdb0dbed6696a809c7c36610/firewall_cli.py))
 
 This CLI version will maintain the core functionality while providing a terminal-based interface.I've created a comprehensive CLI version of your firewall application. Here are the key features and improvements:
 
