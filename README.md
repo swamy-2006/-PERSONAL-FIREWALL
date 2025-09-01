@@ -424,3 +424,12 @@ python firewall_cli.py --stop
 - existing `rules.json` rules file(rules1.json/rules2.json)
 
 The CLI version maintains all the core functionality of your GUI version while providing a more scriptable and automation-friendly interface. It's perfect for server environments, automation scripts, or users who prefer command-line tools.
+
+
+
+
+
+.
+
+
+ofcourse with the help of AI.
